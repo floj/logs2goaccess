@@ -14,6 +14,8 @@ import (
 
 func main() {
 	printLogFormat := flag.Bool("print-log-format", false, "Print the log-format to use in goaccess")
+	printDateFormat := flag.Bool("print-date-format", false, "Print the date-format to use in goaccess")
+	printTimeFormat := flag.Bool("print-time-format", false, "Print the time-format to use in goaccess")
 
 	inFmt := flag.String("in-format", "", "format of the data read, possible values are: caddy, aws-elb, aws-cloudfront")
 
@@ -24,7 +26,15 @@ func main() {
 	flag.Parse()
 
 	if *printLogFormat {
-		fmt.Println(goaccess.LineFormat)
+		fmt.Println(goaccess.LineFormat())
+		return
+	}
+	if *printDateFormat {
+		fmt.Println(goaccess.DateFormat)
+		return
+	}
+	if *printTimeFormat {
+		fmt.Println(goaccess.TimeFormat)
 		return
 	}
 
@@ -72,9 +82,12 @@ func run(inFmt string, locations []string, filters []filter.Filter, out io.Write
 			break
 		}
 
-		gl, err := tfmr.Parse(line)
+		gl, skip, err := tfmr.Parse(line)
 		if err != nil {
 			return err
+		}
+		if skip {
+			continue
 		}
 
 		include := true

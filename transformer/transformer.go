@@ -5,14 +5,16 @@ import (
 
 	"github.com/floj/logs2goaccess/goaccess"
 	"github.com/floj/logs2goaccess/transformer/caddy"
+	"github.com/floj/logs2goaccess/transformer/cloudfront"
 )
 
 type Transformer interface {
-	Parse(line string) (*goaccess.Line, error)
+	Parse(line string) (*goaccess.Line, bool, error)
 }
 
 var factories = map[string]func() (Transformer, error){
-	"caddy": func() (Transformer, error) { return &caddy.CaddyParser{}, nil },
+	"caddy":          func() (Transformer, error) { return &caddy.Parser{}, nil },
+	"aws:cloudfront": func() (Transformer, error) { return &cloudfront.Parser{}, nil },
 }
 
 func ForName(name string) (Transformer, error) {

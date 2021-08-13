@@ -35,13 +35,12 @@ import (
 */
 
 type Line struct {
-	Timestamp       time.Time     // %x
+	Timestamp       time.Time     // %d %t
 	VHost           string        // %v
 	Username        string        // %e
-	ClientIP        string        // %C
+	ClientIP        string        // %h
 	Method          string        // %m
 	URL             string        // %U
-	RequestProtocol string        // %H
 	ResponseStatus  int           // %s
 	ResponseSize    int64         // %b
 	Referer         string        // %R
@@ -50,30 +49,54 @@ type Line struct {
 	TLSCipher       string        // %k
 	ContentType     string        // %M
 	RequestDuration time.Duration // %L
-	//XForwardedFor   string  // ~h
 }
 
-const LineFormat = "%x\t%v\t%e\t%C\t%m\t%U\t%H\t%s\t%b\t%R\t%u\t%K\t%k\t%M\t%L"
+const (
+	DateFormat = `%Y-%m-%d`
+	TimeFormat = `%H:%M:%S`
 
-const isoLocalDate = "2006-01-02T15:04:05"
+	localDate = "2006-01-02"
+	localTime = "15:04:05"
+)
+
+func LineFormat() string {
+	fields := []string{
+		"%d",
+		"%t",
+		"%v",
+		"%e",
+		"%h",
+		"%m",
+		"%U",
+		"%s",
+		"%b",
+		"%R",
+		"%u",
+		"%K",
+		"%k",
+		"%M",
+		"%L",
+	}
+	return strings.Join(fields, `\t`)
+}
 
 func (l *Line) ToGoAccess() string {
 	fields := []string{
-		l.Timestamp.Format(isoLocalDate),
-		l.VHost,
-		l.Username,
-		l.ClientIP,
-		l.Method,
-		l.URL,
-		l.RequestProtocol,
-		strconv.Itoa(l.ResponseStatus),
-		strconv.FormatInt(l.ResponseSize, 10),
-		l.Referer,
-		l.UserAgent,
-		l.TLSProtocol,
-		l.TLSCipher,
-		l.ContentType,
-		strconv.FormatInt(l.RequestDuration.Milliseconds(), 10),
+		/* %d */ l.Timestamp.Format(localDate),
+		/* %t */ l.Timestamp.Format(localTime),
+		/* %v */ l.VHost,
+		/* %e */ l.Username,
+		/* %h */ l.ClientIP,
+		/* %m */ l.Method,
+		/* %U */ l.URL,
+		/* %s */ strconv.Itoa(l.ResponseStatus),
+		/* %b */ strconv.FormatInt(l.ResponseSize, 10),
+		/* %R */ l.Referer,
+		/* %u */ l.UserAgent,
+		/* %K */ l.TLSProtocol,
+		/* %k */ l.TLSCipher,
+		/* %M */ l.ContentType,
+		/* %L */ strconv.FormatInt(l.RequestDuration.Milliseconds(), 10),
 	}
 	return strings.Join(fields, "\t")
 }

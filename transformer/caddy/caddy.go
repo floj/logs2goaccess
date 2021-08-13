@@ -11,14 +11,14 @@ import (
 	"github.com/floj/logs2goaccess/transformer/utils"
 )
 
-type CaddyParser struct {
+type Parser struct {
 }
 
-func (p *CaddyParser) Parse(text string) (*goaccess.Line, error) {
+func (p *Parser) Parse(text string) (*goaccess.Line, bool, error) {
 	cl := caddyLog{}
 	err := json.Unmarshal([]byte(text), &cl)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// normalize headers
@@ -27,11 +27,15 @@ func (p *CaddyParser) Parse(text string) (*goaccess.Line, error) {
 
 	clientIP, _, _ := net.SplitHostPort(cl.Request.RemoteAddr)
 	if xff := reqHeaders.Get("x-forwarded-for"); xff != "" {
-		parts := strings.SplitN(xff, ",", 2)
-		clientIP = strings.TrimSpace(parts[0])
+		parts := strings.Split(xff, ",")
+		clientIP = strings.TrimSpace(parts[len(parts)-1])
 	}
 
-	contentType, _, _ := mime.ParseMediaType(respHeaders.Get("content-type"))
+	contentType := ""
+	ctHeader := respHeaders.Get("content-type")
+	if ctHeader != "" {
+		contentType, _, _ = mime.ParseMediaType(respHeaders.Get("content-type"))
+	}
 	return &goaccess.Line{
 		Timestamp:       time.Unix(int64(cl.Ts), 0),
 		VHost:           cl.Request.Host,
@@ -44,7 +48,7 @@ func (p *CaddyParser) Parse(text string) (*goaccess.Line, error) {
 		UserAgent:       reqHeaders.Get("user-agent"),
 		ContentType:     contentType,
 		RequestDuration: time.Duration(cl.Duration * float64(time.Second)),
-	}, nil
+	}, false, nil
 }
 
 type caddyLog struct {
