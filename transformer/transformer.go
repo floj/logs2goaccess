@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/floj/logs2goaccess/goaccess"
+	"github.com/floj/logs2goaccess/transformer/alb"
 	"github.com/floj/logs2goaccess/transformer/caddy"
 	"github.com/floj/logs2goaccess/transformer/cloudfront"
 )
@@ -15,6 +16,7 @@ type Transformer interface {
 var factories = map[string]func() (Transformer, error){
 	"caddy":          func() (Transformer, error) { return &caddy.Parser{}, nil },
 	"aws:cloudfront": func() (Transformer, error) { return &cloudfront.Parser{}, nil },
+	"aws:alb":        func() (Transformer, error) { return &alb.Parser{}, nil },
 }
 
 func ForName(name string) (Transformer, error) {
