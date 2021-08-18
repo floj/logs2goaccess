@@ -119,6 +119,10 @@ var locationResolvers = map[string]func(s string) ([]string, error){
 				return nil, err
 			}
 			for _, c := range page.Contents {
+				// skip empty files
+				if c.Size == 0 {
+					continue
+				}
 				if !matcher(*c.Key) {
 					continue
 				}
