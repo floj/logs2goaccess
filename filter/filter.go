@@ -8,12 +8,8 @@ import (
 
 type Filter func(*goaccess.Line) bool
 
-func AddFilterIfNotEmpty(filters []Filter, v string, fn func([]string) Filter) []Filter {
-	if v == "" {
-		return filters
-	}
-	filter := fn(strings.Split(v, ","))
-	return append(filters, filter)
+func AddFilterIfNotEmpty(filters []Filter, v []string, fn func([]string) Filter) []Filter {
+	return append(filters, fn(v))
 }
 
 func NewIncludeHostsPrefixFilter(prefixes []string) Filter {
