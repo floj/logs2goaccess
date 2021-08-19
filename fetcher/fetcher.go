@@ -85,6 +85,8 @@ var locationResolvers = map[string]func(s string) ([]string, error){
 
 		loc = strings.TrimPrefix(loc, "s3:")
 		if !strings.HasPrefix(loc, "recurse:") {
+			// remove '//' prefix if present as in s3://my-bucket
+			loc = strings.TrimPrefix(loc, "//")
 			return []string{loc}, nil
 		}
 
@@ -93,20 +95,18 @@ var locationResolvers = map[string]func(s string) ([]string, error){
 			return nil, err
 		}
 		loc = strings.TrimPrefix(loc, "recurse:")
+		// remove '//' prefix if present as in s3:recurse://my-bucket
+		loc = strings.TrimPrefix(loc, "//")
 
 		locs := []string{}
 
-		parts := strings.Split(loc, "/")
-		bucket := parts[0]
-
-		lastPart := parts[len(parts)-1]
-		matcher, stripPart, err := matcherFromPart(lastPart)
+		loc, matcher, err := findMatchers(loc)
 		if err != nil {
 			return nil, err
 		}
-		if stripPart {
-			parts = parts[0 : len(parts)-1]
-		}
+
+		parts := strings.Split(loc, "/")
+		bucket := parts[0]
 
 		paginator := s3.NewListObjectsV2Paginator(client, &s3.ListObjectsV2Input{
 			Bucket: &bucket,
@@ -131,6 +131,29 @@ var locationResolvers = map[string]func(s string) ([]string, error){
 		}
 		return locs, nil
 	},
+}
+
+func findMatchers(loc string) (string, matcher, error) {
+	parts := strings.Split(loc, "|")
+	if len(parts) == 1 {
+		return loc, func(s string) bool { return true }, nil
+	}
+	matchers := []matcher{}
+	for _, p := range parts[1:] {
+		m, err := newMatcher(p)
+		if err != nil {
+			return "", nil, err
+		}
+		matchers = append(matchers, m)
+	}
+	return parts[0], func(s string) bool {
+		for _, m := range matchers {
+			if !m(s) {
+				return false
+			}
+		}
+		return true
+	}, nil
 }
 
 func resolverFor(loc string) (locationResolver, bool) {
@@ -213,20 +236,22 @@ func open(location string) (io.ReadCloser, error) {
 	return nil, fmt.Errorf("no fetcher for '%s' found, supported prefixes are %v", location, prefixes)
 }
 
-func matcherFromPart(part string) (func(string) bool, bool, error) {
-	if strings.HasPrefix(part, "rexexp:") {
-		pattern := strings.TrimPrefix(part, "regexp:")
+type matcher func(string) bool
+
+func newMatcher(def string) (matcher, error) {
+	if strings.HasPrefix(def, "rexexp:") {
+		pattern := strings.TrimPrefix(def, "regexp:")
 		re, err := regexp.Compile(pattern)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
-		return re.MatchString, true, nil
+		return re.MatchString, nil
 	}
 
-	if strings.HasPrefix(part, "suffix:") {
-		suf := strings.TrimPrefix(part, "suffix:")
-		return func(s string) bool { return strings.HasSuffix(s, suf) }, true, nil
+	if strings.HasPrefix(def, "suffix:") {
+		suf := strings.TrimPrefix(def, "suffix:")
+		return func(s string) bool { return strings.HasSuffix(s, suf) }, nil
 	}
 
-	return func(s string) bool { return true }, false, nil
+	return nil, fmt.Errorf("unknown matcher definition: '%s'", def)
 }
