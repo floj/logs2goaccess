@@ -8,7 +8,7 @@ import (
 
 type Filter func(*goaccess.Line) bool
 
-func AddFilterIfNotEmpty(filters []Filter, v []string, fn func([]string) Filter) []Filter {
+func AddIfNotEmpty(filters []Filter, v []string, fn func([]string) Filter) []Filter {
 	if len(v) == 0 {
 		return filters
 	}

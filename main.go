@@ -10,6 +10,7 @@ import (
 	"github.com/floj/logs2goaccess/fetcher"
 	"github.com/floj/logs2goaccess/filter"
 	"github.com/floj/logs2goaccess/goaccess"
+	"github.com/floj/logs2goaccess/normalizer"
 	"github.com/floj/logs2goaccess/transformer"
 )
 
@@ -23,6 +24,7 @@ func main() {
 	filterIncludeVHosts := flag.StringSlice("filter-include-vhost", []string{}, "only include logs matching the vhost prefix")
 	filterExcludeClientIPs := flag.StringSlice("filter-exclude-client-ip", []string{}, "exclude logs matching the client ip prefix")
 	filterExcludeURLs := flag.StringSlice("filter-exclude-url", []string{}, "exclude logs matching the URL prefix")
+	normalizeURLs := flag.StringSlice("normalize-url", []string{}, "perform some normalisation on the url")
 
 	flag.Parse()
 
@@ -50,19 +52,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	var err error
+
 	filters := []filter.Filter{}
-	filters = filter.AddFilterIfNotEmpty(filters, *filterIncludeVHosts, filter.NewIncludeHostsPrefixFilter)
-	filters = filter.AddFilterIfNotEmpty(filters, *filterExcludeURLs, filter.NewExcludeURLsPrefixFilter)
-	filters = filter.AddFilterIfNotEmpty(filters, *filterExcludeClientIPs, filter.NewExcludeClientsPrefixFilter)
+	filters = filter.AddIfNotEmpty(filters, *filterIncludeVHosts, filter.NewIncludeHostsPrefixFilter)
+	filters = filter.AddIfNotEmpty(filters, *filterExcludeURLs, filter.NewExcludeURLsPrefixFilter)
+	filters = filter.AddIfNotEmpty(filters, *filterExcludeClientIPs, filter.NewExcludeClientsPrefixFilter)
+
+	normalizers := []normalizer.Normalizer{}
+	if normalizers, err = normalizer.AddIfNotEmpty(normalizers, *normalizeURLs, normalizer.NewURLNormalizer); err != nil {
+		panic(err)
+	}
 
 	locations := flag.Args()
-	err := run(*inFmt, locations, filters, os.Stdout)
+	err = run(*inFmt, locations, filters, normalizers, os.Stdout)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func run(inFmt string, locations []string, filters []filter.Filter, out io.Writer) error {
+func run(inFmt string, locations []string, filters []filter.Filter, normalizers []normalizer.Normalizer, out io.Writer) error {
 	in, err := fetcher.ForLocations(locations)
 	if err != nil {
 		return err
@@ -84,6 +93,7 @@ func run(inFmt string, locations []string, filters []filter.Filter, out io.Write
 		}
 		gl, skip, err := tfmr.Parse(line)
 		if err != nil {
+			fmt.Fprintln(os.Stderr, line)
 			return err
 		}
 		if skip {
@@ -100,6 +110,14 @@ func run(inFmt string, locations []string, filters []filter.Filter, out io.Write
 		}
 		if !include {
 			continue
+		}
+
+		for _, normalize := range normalizers {
+			gl, err = normalize(gl)
+			if err != nil {
+				fmt.Fprintln(out, line)
+				return err
+			}
 		}
 		_, err = out.Write([]byte(gl.ToGoAccess()))
 		if err != nil {
