@@ -112,9 +112,13 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 	}
 
 	statsT := time.NewTicker(time.Second * 5)
-	defer statsT.Stop()
+
 	statsC := make(chan stats)
-	defer close(statsC)
+	quitC := make(chan struct{})
+	defer func() {
+		statsT.Stop()
+		quitC <- struct{}{}
+	}()
 
 	go func() {
 		stat := stats{}
@@ -130,6 +134,8 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 				fmt.Fprintf(os.Stderr, "%d lines read (~%.0f/sec), %d included, %d skipped\n", stat.read, avg, stat.included, stat.skipped)
 				lastStat = stat
 				lastTime = t
+			case <-quitC:
+				return
 			}
 		}
 	}()
