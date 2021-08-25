@@ -89,6 +89,12 @@ func main() {
 	}
 }
 
+type stats struct {
+	read     int
+	skipped  int
+	included int
+}
+
 func run(inFmt string, locations []string, filterConf filter.FilterConf, normalizers []normalizer.Normalizer, out io.Writer) error {
 	filter, err := filterConf.Build()
 	if err != nil {
@@ -105,33 +111,34 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 		return err
 	}
 
-	tmr := time.NewTicker(time.Second * 5)
-	defer tmr.Stop()
-	cntC := make(chan int)
-	defer close(cntC)
+	statsT := time.NewTicker(time.Second * 5)
+	defer statsT.Stop()
+	statsC := make(chan stats)
+	defer close(statsC)
 
 	go func() {
-		cnt := 0
-		lastCnt := 0
+		stat := stats{}
+		lastStat := stat
 		lastTime := time.Now()
 		for {
 			select {
-			case i := <-cntC:
-				cnt = i
-			case t := <-tmr.C:
-				delta := cnt - lastCnt
+			case s := <-statsC:
+				stat = s
+			case t := <-statsT.C:
+				delta := stat.read - lastStat.read
 				avg := float64(delta) / t.Sub(lastTime).Seconds()
-				fmt.Fprintf(os.Stderr, "%d lines read (~%.0f/sec)\n", cnt, avg)
-				lastCnt = cnt
+				fmt.Fprintf(os.Stderr, "%d lines read (~%.0f/sec), %d included, %d skipped\n", stat.read, avg, stat.included, stat.skipped)
+				lastStat = stat
 				lastTime = t
 			}
 		}
 	}()
 
-	// read all lines
-	cnt := 0
+	stat := stats{}
 	start := time.Now()
+	// read all lines
 	for {
+		statsC <- stat
 		line, ok, err := in.Next()
 		if err != nil {
 			return err
@@ -139,8 +146,7 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 		if !ok {
 			break
 		}
-		cnt++
-		cntC <- cnt
+		stat.read++
 
 		gl, skip, err := tfmr.Parse(line)
 		if err != nil {
@@ -152,8 +158,10 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 		}
 
 		if !filter(gl) {
+			stat.skipped++
 			continue
 		}
+		stat.included++
 
 		for _, normalize := range normalizers {
 			gl, err = normalize(gl)
@@ -172,7 +180,7 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 		}
 
 	}
-	fmt.Fprintf(os.Stderr, "%d lines read in %s\n", cnt, time.Since(start))
+	fmt.Fprintf(os.Stderr, "%d lines read in %s\n", stat.read, time.Since(start))
 	return nil
 }
 
