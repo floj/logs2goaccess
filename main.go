@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	flag "github.com/spf13/pflag"
 
@@ -24,6 +25,9 @@ func main() {
 	filterIncludeVHosts := flag.StringSlice("filter-include-vhost", []string{}, "only include logs matching the vhost prefix")
 	filterExcludeClientIPs := flag.StringSlice("filter-exclude-client-ip", []string{}, "exclude logs matching the client ip prefix")
 	filterExcludeURLs := flag.StringSlice("filter-exclude-url", []string{}, "exclude logs matching the URL prefix")
+	//filterDateBefore := flag.TStringSlice("filter-date-before", []string{}, "exclude logs matching the URL prefix")
+	filterDateAfter := flag.String("filter-date-from", "", "only include logs after at this date")
+	filterDateBefore := flag.String("filter-date-to", "", "only include logs before this date")
 	normalizeURLs := flag.StringSlice("normalize-url", []string{}, "perform some normalisation on the url")
 
 	flag.Parse()
@@ -41,10 +45,32 @@ func main() {
 		return
 	}
 
+	filterConf := filter.FilterConf{
+		IncludeHostPrefix:   *filterIncludeVHosts,
+		ExcludeClientPrefix: *filterExcludeClientIPs,
+		ExcludeURLPrefix:    *filterExcludeURLs,
+	}
+
 	flagErrs := []string{}
 	if *inFmt == "" {
 		flagErrs = append(flagErrs, "--in-format is required")
 	}
+
+	{
+		d, err := tryParseDate(*filterDateAfter)
+		if err != nil {
+			flagErrs = append(flagErrs, fmt.Sprintf("--filter-date-from: %v", err))
+		}
+		filterConf.DateAfter = d
+	}
+	{
+		d, err := tryParseDate(*filterDateBefore)
+		if err != nil {
+			flagErrs = append(flagErrs, fmt.Sprintf("--filter-date-to: %v", err))
+		}
+		filterConf.DateBefore = d
+	}
+
 	if len(flagErrs) > 0 {
 		for _, e := range flagErrs {
 			fmt.Println("flag", e)
@@ -52,27 +78,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	var err error
-
-	filters := []filter.Filter{}
-	filters = filter.AddIfNotEmpty(filters, *filterIncludeVHosts, filter.NewIncludeHostsPrefixFilter)
-	filters = filter.AddIfNotEmpty(filters, *filterExcludeURLs, filter.NewExcludeURLsPrefixFilter)
-	filters = filter.AddIfNotEmpty(filters, *filterExcludeClientIPs, filter.NewExcludeClientsPrefixFilter)
-
-	normalizers := []normalizer.Normalizer{}
-	if normalizers, err = normalizer.AddIfNotEmpty(normalizers, *normalizeURLs, normalizer.NewURLNormalizer); err != nil {
+	normalizers, err := normalizer.AddIfNotEmpty([]normalizer.Normalizer{}, *normalizeURLs, normalizer.NewURLNormalizer)
+	if err != nil {
 		panic(err)
 	}
 
-	locations := flag.Args()
-	err = run(*inFmt, locations, filters, normalizers, os.Stdout)
+	err = run(*inFmt, flag.Args(), filterConf, normalizers, os.Stdout)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func run(inFmt string, locations []string, filters []filter.Filter, normalizers []normalizer.Normalizer, out io.Writer) error {
-	in, err := fetcher.ForLocations(locations)
+func run(inFmt string, locations []string, filterConf filter.FilterConf, normalizers []normalizer.Normalizer, out io.Writer) error {
+	filter, err := filterConf.Build()
+	if err != nil {
+		return err
+	}
+
+	in, err := fetcher.ForLocations(locations, filterConf)
 	if err != nil {
 		return err
 	}
@@ -91,6 +114,7 @@ func run(inFmt string, locations []string, filters []filter.Filter, normalizers 
 		if !ok {
 			break
 		}
+
 		gl, skip, err := tfmr.Parse(line)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, line)
@@ -100,15 +124,7 @@ func run(inFmt string, locations []string, filters []filter.Filter, normalizers 
 			continue
 		}
 
-		include := true
-		for _, filter := range filters {
-			if filter(gl) {
-				continue
-			}
-			include = false
-			break
-		}
-		if !include {
+		if !filter(gl) {
 			continue
 		}
 
@@ -130,4 +146,24 @@ func run(inFmt string, locations []string, filters []filter.Filter, normalizers 
 
 	}
 	return nil
+}
+
+func tryParseDate(v string) (*time.Time, error) {
+	if v == "" {
+		return nil, nil
+	}
+	formats := []string{
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02T15:04",
+		"2006-01-02",
+	}
+	for _, f := range formats {
+		t, err := time.Parse(f, v)
+		if err == nil {
+			return &t, nil
+		}
+	}
+	return nil, fmt.Errorf("unknown date format: accepted formarts are %v", formats)
 }
