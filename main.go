@@ -105,7 +105,32 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 		return err
 	}
 
+	tmr := time.NewTicker(time.Second * 5)
+	defer tmr.Stop()
+	cntC := make(chan int)
+	defer close(cntC)
+
+	go func() {
+		cnt := 0
+		lastCnt := 0
+		lastTime := time.Now()
+		for {
+			select {
+			case i := <-cntC:
+				cnt = i
+			case t := <-tmr.C:
+				delta := cnt - lastCnt
+				avg := float64(delta) / t.Sub(lastTime).Seconds()
+				fmt.Fprintf(os.Stderr, "%d lines read (~%.0f/sec)\n", cnt, avg)
+				lastCnt = cnt
+				lastTime = t
+			}
+		}
+	}()
+
 	// read all lines
+	cnt := 0
+	start := time.Now()
 	for {
 		line, ok, err := in.Next()
 		if err != nil {
@@ -114,6 +139,8 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 		if !ok {
 			break
 		}
+		cnt++
+		cntC <- cnt
 
 		gl, skip, err := tfmr.Parse(line)
 		if err != nil {
@@ -145,6 +172,7 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 		}
 
 	}
+	fmt.Fprintf(os.Stderr, "%d lines read in %s\n", cnt, time.Since(start))
 	return nil
 }
 
