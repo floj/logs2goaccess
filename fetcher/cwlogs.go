@@ -35,7 +35,7 @@ func cwLogsResolver(loc string) ([]string, error) {
 
 type cwlReader struct {
 	pager *cloudwatchlogs.FilterLogEventsPaginator
-	buf   *bytes.Buffer
+	mr    io.Reader
 }
 
 func (r *cwlReader) Close() error {
@@ -43,7 +43,7 @@ func (r *cwlReader) Close() error {
 }
 
 func (r *cwlReader) Read(p []byte) (int, error) {
-	if r.buf == nil {
+	if r.mr == nil {
 		if !r.pager.HasMorePages() {
 			return 0, io.EOF
 		}
@@ -51,16 +51,16 @@ func (r *cwlReader) Read(p []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		r.buf = &bytes.Buffer{}
+		rr := []io.Reader{}
 		for _, e := range page.Events {
-			r.buf.WriteString(*e.Message)
-			r.buf.WriteByte('\n')
+			rr = append(rr, strings.NewReader(*e.Message), bytes.NewBuffer([]byte{'\n'}))
 		}
+		r.mr = io.MultiReader(rr...)
 	}
 
-	n, err := r.buf.Read(p)
+	n, err := r.mr.Read(p)
 	if err == io.EOF {
-		r.buf = nil
+		r.mr = nil
 		err = nil
 	}
 	return n, err
