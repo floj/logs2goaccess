@@ -47,12 +47,12 @@ func (p *Parser) Parse(text string) (*goaccess.Line, bool, error) {
 
 	contentType, err := url.PathUnescape(fields[19])
 	if err != nil {
-		return nil, false, err
+		return nil, true, err
 	}
 
 	userAgent, err := url.PathUnescape(fields[10])
 	if err != nil {
-		return nil, false, err
+		return nil, true, err
 	}
 
 	return &goaccess.Line{

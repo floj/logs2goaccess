@@ -156,7 +156,7 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 
 		gl, skip, err := tfmr.Parse(line)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, line)
+			fmt.Fprintln(os.Stderr, "TRANSFORM", line)
 			return err
 		}
 		if skip {
@@ -172,7 +172,7 @@ func run(inFmt string, locations []string, filterConf filter.FilterConf, normali
 		for _, normalize := range normalizers {
 			gl, err = normalize(gl)
 			if err != nil {
-				fmt.Fprintln(out, line)
+				fmt.Fprintln(out, "NORMALIZE", line)
 				return err
 			}
 		}
