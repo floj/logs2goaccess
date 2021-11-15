@@ -13,6 +13,7 @@ type FilterConf struct {
 	IncludeHostPrefix   []string
 	ExcludeClientPrefix []string
 	ExcludeURLPrefix    []string
+	IncludeURLPrefix    []string
 }
 
 func (c *FilterConf) Build() (Filter, error) {
@@ -20,6 +21,8 @@ func (c *FilterConf) Build() (Filter, error) {
 	filters = AddIfNotEmpty(filters, c.IncludeHostPrefix, NewIncludeHostsPrefixFilter)
 	filters = AddIfNotEmpty(filters, c.ExcludeClientPrefix, NewExcludeClientsPrefixFilter)
 	filters = AddIfNotEmpty(filters, c.ExcludeURLPrefix, NewExcludeURLsPrefixFilter)
+	filters = AddIfNotEmpty(filters, c.IncludeURLPrefix, NewIncludeURLsPrefixFilter)
+
 	if c.DateAfter != nil {
 		filters = append(filters, NewDateAfterFilter(*c.DateAfter))
 	}
@@ -89,5 +92,17 @@ func NewExcludeURLsPrefixFilter(prefixes []string) Filter {
 			}
 		}
 		return true
+	}
+}
+
+func NewIncludeURLsPrefixFilter(prefixes []string) Filter {
+	return func(l *goaccess.Line) bool {
+		for _, p := range prefixes {
+			if strings.HasPrefix(l.URL, p) {
+				return true
+			}
+		}
+		//fmt.Fprintf(os.Stderr, "excluding: URL has no prefix in %v\n", prefixes)
+		return false
 	}
 }

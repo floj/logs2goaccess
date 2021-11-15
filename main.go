@@ -25,6 +25,7 @@ func main() {
 	filterIncludeVHosts := flag.StringSlice("filter-include-vhost", []string{}, "only include logs matching the vhost prefix")
 	filterExcludeClientIPs := flag.StringSlice("filter-exclude-client-ip", []string{}, "exclude logs matching the client ip prefix")
 	filterExcludeURLs := flag.StringSlice("filter-exclude-url", []string{}, "exclude logs matching the URL prefix")
+	filterIncludeURLs := flag.StringSlice("filter-include-url", []string{}, "include logs matching the URL prefix")
 	//filterDateBefore := flag.TStringSlice("filter-date-before", []string{}, "exclude logs matching the URL prefix")
 	filterDateAfter := flag.String("filter-date-from", "", "only include logs after at this date")
 	filterDateBefore := flag.String("filter-date-to", "", "only include logs before this date")
@@ -49,6 +50,7 @@ func main() {
 		IncludeHostPrefix:   *filterIncludeVHosts,
 		ExcludeClientPrefix: *filterExcludeClientIPs,
 		ExcludeURLPrefix:    *filterExcludeURLs,
+		IncludeURLPrefix:    *filterIncludeURLs,
 	}
 
 	flagErrs := []string{}
